@@ -1,0 +1,678 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>USPTO Official Certificate Generator with DB</title>
+<link href="https://fonts.googleapis.com/css2?family=UnifrakturCook:wght@700&family=Alex+Brush&family=Great+Vibes&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
+    :root {
+        --bg-dark: #131620;
+        --card-bg: #1c202e;
+        --input-bg: #12151f;
+        --border-color: #2c3246;
+        --label-yellow: #e5c138;
+        --text-light: #e2e8f0;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+        background-color: var(--bg-dark);
+        color: var(--text-light);
+        font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+        padding: 20px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 25px;
+    }
+
+    .container {
+        width: 100%;
+        max-width: 920px;
+        display: flex;
+        flex-direction: column;
+        gap: 25px;
+    }
+
+    /* Control Panel */
+    .control-panel, .database-panel {
+        background-color: var(--card-bg);
+        border: 1px solid var(--border-color);
+        border-radius: 12px;
+        padding: 24px;
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.4);
+    }
+
+    .panel-title {
+        color: var(--label-yellow);
+        font-size: 1.25rem;
+        font-weight: 700;
+        margin-bottom: 20px;
+        border-bottom: 1px solid var(--border-color);
+        padding-bottom: 10px;
+    }
+
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+    .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; margin-bottom: 16px; }
+
+    @media (max-width: 650px) { .grid-2, .grid-3 { grid-template-columns: 1fr; } }
+
+    .form-group { display: flex; flex-direction: column; gap: 6px; margin-bottom: 16px; }
+    .grid-2 .form-group, .grid-3 .form-group { margin-bottom: 0; }
+
+    label { color: var(--label-yellow); font-size: 0.74rem; font-weight: 700; text-transform: uppercase; }
+
+    .input-wrapper { display: flex; align-items: center; gap: 8px; }
+
+    input[type="text"], select, textarea {
+        width: 100%; background-color: var(--input-bg); border: 1px solid var(--border-color);
+        color: var(--text-light); padding: 10px 12px; border-radius: 6px; font-size: 0.88rem; outline: none;
+    }
+
+    input:focus, select:focus, textarea:focus { border-color: var(--label-yellow); }
+
+    .badge-btn { background-color: #eab308; color: #111827; border: none; border-radius: 20px; padding: 6px 12px; font-size: 0.72rem; font-weight: 800; cursor: pointer; white-space: nowrap; }
+    .btn-purple { background-color: #7c3aed; color: white; border: none; padding: 9px 14px; border-radius: 6px; font-size: 0.76rem; font-weight: 700; cursor: pointer; }
+    .btn-red-sm { background-color: #dc2626; color: white; border: none; padding: 9px 14px; border-radius: 6px; font-size: 0.76rem; font-weight: 700; cursor: pointer; }
+    .btn-green { background-color: #10b981; color: white; border: none; padding: 9px 14px; border-radius: 6px; font-size: 0.76rem; font-weight: 700; cursor: pointer; }
+    
+    .media-controls { background: var(--input-bg); border: 1px solid var(--border-color); padding: 14px; border-radius: 8px; display: flex; flex-direction: column; gap: 12px; }
+    .media-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+    .slider-row { display: flex; align-items: center; gap: 12px; }
+    input[type="range"] { flex: 1; accent-color: var(--label-yellow); cursor: pointer; }
+    .scale-box { width: 75px !important; text-align: center; padding: 6px !important; }
+
+    .action-bar { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-top: 20px; }
+    @media (max-width: 600px) { .action-bar { grid-template-columns: 1fr; } }
+
+    .btn-main { padding: 13px 16px; border: none; border-radius: 8px; font-size: 0.85rem; font-weight: 700; color: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; }
+    .btn-blue { background-color: #2563eb; }
+    .btn-crimson { background-color: #e11d48; }
+
+    /* Database Styles */
+    .db-item {
+        display: flex; justify-content: space-between; align-items: center;
+        background: var(--input-bg); border: 1px solid var(--border-color);
+        padding: 12px 16px; border-radius: 8px; margin-bottom: 10px;
+        flex-wrap: wrap; gap: 10px;
+    }
+    .db-info { display: flex; flex-direction: column; gap: 4px; }
+    .db-tm { font-weight: bold; color: var(--label-yellow); font-size: 1rem; }
+    .db-owner { font-size: 0.85rem; color: #94a3b8; }
+    .db-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+    /* ================= CERTIFICATE PAGES ================= */
+    .preview-container { display: flex; flex-direction: column; align-items: center; gap: 30px; width: 100%; overflow-x: auto; padding: 10px 0; }
+
+    .cert-page {
+        width: 794px; height: 1123px; background: #ffffff; color: #111111;
+        padding: 45px 60px 40px 60px; box-shadow: 0 15px 35px rgba(0, 0, 0, 0.55);
+        font-family: 'Times New Roman', Times, serif; position: relative;
+        display: flex; flex-direction: column; justify-content: space-between; overflow: hidden; 
+    }
+
+    .header-logo-wrapper { width: 100%; max-width: 680px; margin: 0 auto 35px auto; text-align: center; }
+    .header-logo-wrapper img { display: block; width: 100%; height: auto; object-fit: contain; }
+
+    .mark-showcase { text-align: center; margin: 10px 0 40px 0; min-height: 75px; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+    #prev-wordMark { font-family: 'Times New Roman', Times, serif; font-size: 36px; font-weight: normal; letter-spacing: 2.5px; text-transform: uppercase; color: #111; }
+    #cert-logo-img { display: none; max-width: 100%; height: auto; object-fit: contain; }
+
+    .cert-two-col { display: grid; grid-template-columns: 195px 1fr; gap: 25px; align-items: start; flex: 1; }
+    .left-meta { font-size: 13px; font-weight: bold; line-height: 1.6; color: #111; }
+    .right-details { font-size: 12.5px; line-height: 1.45; color: #111; text-align: justify; }
+    .right-details p { margin-bottom: 12px; }
+
+    .page1-footer { display: flex; justify-content: space-between; align-items: flex-end; margin-top: 20px; padding-bottom: 10px; }
+    .seal-sig-block { display: flex; flex-direction: column; align-items: flex-start; gap: 0; }
+    
+    .seal-container { width: 105px; height: 105px; display: flex; justify-content: center; align-items: center; margin-bottom: 2px; }
+    .seal-container img { display: block; width: 105px; height: 105px; object-fit: contain; }
+
+    .signature-wrapper { margin-top: 2px; margin-left: 5px; height: 50px; display: flex; align-items: flex-end; }
+    .sig-handwriting { font-family: 'Alex Brush', cursive; font-size: 44px; color: #111111; line-height: 1; padding-bottom: 5px; z-index: 2; }
+    .sig-caption { font-size: 7.5px; line-height: 1.3; color: #222; margin-top: 0px; margin-left: 5px; white-space: nowrap; }
+
+    #qrcode-container { padding: 4px; background: #fff; margin-bottom: 10px; }
+
+    .page2-box { border: 1.5px solid #111; padding: 12px 20px; text-align: center; font-weight: bold; font-size: 11px; line-height: 1.4; margin-top: 10px; margin-bottom: 25px; text-transform: uppercase; }
+    .page2-content { font-size: 11px; line-height: 1.5; color: #111; text-align: justify; flex: 1; }
+    .page2-content h4 { font-size: 11px; font-weight: bold; margin-top: 15px; margin-bottom: 5px; line-height: 1.3; }
+    .page2-content ul { padding-left: 22px; margin-bottom: 15px; }
+    .page2-content li { margin-bottom: 12px; }
+    .page2-content p { margin-bottom: 12px; }
+    .page2-footer { text-align: center; font-size: 10px; color: #222; padding-top: 20px; padding-bottom: 20px; }
+
+    /* Hide controls in view mode */
+    body.view-mode .control-panel, body.view-mode .database-panel { display: none; }
+</style>
+</head>
+<body>
+
+<div class="container">
+    <!-- CONTROL PANEL -->
+    <div class="control-panel">
+        <div class="panel-title">USPTO Certificate Controls</div>
+
+        <div class="grid-3">
+            <div class="form-group" style="background: #2c3246; padding: 10px; border-radius: 8px;">
+                <label style="color: #fff;">💾 TM Number (Unique ID)</label>
+                <div class="input-wrapper">
+                    <input type="text" id="tmNumber" value="TM-1001" placeholder="e.g. TM-1001" oninput="updatePreview()">
+                    <button class="btn-green" onclick="saveToDatabase()">SAVE</button>
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Registration No. (Reg. No.)</label>
+                <div class="input-wrapper">
+                    <input type="text" id="regNo" value="6,392,309" oninput="updatePreview()">
+                    <button class="badge-btn" onclick="randomRegNo()">R</button>
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Registered Date</label>
+                <div class="input-wrapper">
+                    <input type="text" id="regDate" value="Jun. 22, 2021" oninput="updatePreview()">
+                    <button class="badge-btn" onclick="randomDate('regDate')">RND</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid-3">
+            <div class="form-group">
+                <label>Page 2 Footer RN #</label>
+                <input type="text" id="footerRnNo" value="6392309" oninput="updatePreview()">
+            </div>
+            <div class="form-group">
+                <label>International Class (Int. Cl.)</label>
+                <input type="text" id="intClass" value="41" oninput="updatePreview()">
+            </div>
+            <div class="form-group">
+                <label>Mark Type</label>
+                <select id="markType" onchange="updatePreview()">
+                    <option value="Service Mark">Service Mark</option>
+                    <option value="Trademark">Trademark</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label>✍️ Authorized Signatory Name & Cursive Font Style</label>
+            <div class="media-controls">
+                <div class="grid-2" style="margin-bottom: 0;">
+                    <div>
+                        <input type="text" id="signatoryCustom" value="Dana H..." placeholder="Type Signatory Name..." oninput="updateSignatureText()">
+                    </div>
+                    <div>
+                        <select id="sigFontSelect" onchange="updateSignatureFont()">
+                            <option value="'Alex Brush', cursive">Style 1: Alex Brush</option>
+                            <option value="'Great Vibes', cursive">Style 2: Great Vibes</option>
+                            <option value="'Brush Script MT', cursive">Style 3: Classic Brush</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid-2">
+            <div class="form-group">
+                <label>Owner / Entity Name</label>
+                <input type="text" id="ownerName" value="Montae, Linette" oninput="updatePreview()">
+            </div>
+            <div class="form-group">
+                <label>Entity Type / Jurisdiction</label>
+                <input type="text" id="entityType" value="UNITED STATES INDIVIDUAL" oninput="updatePreview()">
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label>Operational Address</label>
+            <textarea id="address" rows="2" oninput="updatePreview()">2400 Old Brick Rd Ste 58
+Glen Allen, VIRGINIA 23060</textarea>
+        </div>
+
+        <div class="form-group">
+            <label>Class / Goods & Services Description</label>
+            <textarea id="goodsDesc" rows="3" oninput="updatePreview()">CLASS 41: Entertainment and educational services, namely, the presentation of seminars, lectures, workshops and panel discussions, and ongoing television and radio talk shows all in the field of public interest concerning personal and business growth and development; Personal coaching services in the field of personal growth and development; Professional coaching services in the field of business growth and development; Providing a website featuring non-downloadable publications in the nature of articles, magazines, and books in the field of personal and business growth and development; Providing a website featuring non-downloadable audio recordings, non-downloadable webinars, and nondownloadable videos in the field of personal and business growth and development; Providing group coaching in the field of personal and business growth and development</textarea>
+        </div>
+
+        <div class="grid-2">
+            <div class="form-group">
+                <label>First Use Date</label>
+                <input type="text" id="firstUse" value="9-1-2017" oninput="updatePreview()">
+            </div>
+            <div class="form-group">
+                <label>In Commerce Date</label>
+                <input type="text" id="inCommerce" value="9-1-2017" oninput="updatePreview()">
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label>Mark Claim & Description</label>
+            <textarea id="markDesc" rows="2" oninput="updatePreview()">THE MARK CONSISTS OF STANDARD CHARACTERS WITHOUT CLAIM TO ANY PARTICULAR FONT STYLE, SIZE OR COLOR
+
+No claim is made to the exclusive right to use the following apart from the mark as shown: "INFLUENCER"</textarea>
+        </div>
+
+        <div class="grid-2">
+            <div class="form-group">
+                <label>Serial Number (Ser. No.)</label>
+                <div class="input-wrapper">
+                    <input type="text" id="serialNo" value="88-604,311" oninput="updatePreview()">
+                    <button class="badge-btn" onclick="randomSerialNo()">R</button>
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Filed Date</label>
+                <div class="input-wrapper">
+                    <input type="text" id="filedDate" value="09-04-2019" oninput="updatePreview()">
+                    <button class="badge-btn" onclick="randomDate('filedDate')">RND</button>
+                </div>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label>Brand Word Mark Text OR Visual Logo Upload & Resize</label>
+            <div class="media-controls">
+                <input type="text" id="wordMarkInput" value="LEGACY INFLUENCER" placeholder="Enter Brand Text" oninput="updatePreview()">
+                
+                <div class="media-row">
+                    <input type="file" id="logoInput" accept="image/*" style="flex:1; color:#94a3b8;" onchange="handleLogoUpload(event)">
+                    <button class="btn-purple" onclick="removeWhiteBg()">✨ REMOVE BG</button>
+                    <button class="btn-red-sm" onclick="deleteLogo()">🗑 DEL LOGO</button>
+                </div>
+
+                <div class="slider-row">
+                    <span style="font-size: 0.78rem; color: var(--label-yellow); font-weight: bold;">🔍 LOGO SIZE:</span>
+                    <input type="range" id="logoSlider" min="40" max="550" value="180" oninput="syncLogoSize(this.value)">
+                    <input type="number" id="logoScaleInput" class="scale-box" min="40" max="550" value="180" oninput="syncLogoSize(this.value)">
+                    <span style="font-size: 0.75rem; color: #94a3b8;">px</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="action-bar">
+            <button class="btn-main btn-blue" onclick="downloadJPG()">🖼 HQ JPG (Pg 1)</button>
+            <button class="btn-main btn-crimson" onclick="downloadPDF()">📄 HQ PDF (2-Pages)</button>
+        </div>
+    </div>
+
+    <!-- DATABASE PANEL -->
+    <div class="database-panel">
+        <div class="panel-title">Saved Certificates Database</div>
+        <div id="dbList">
+            <!-- Database items will load here -->
+        </div>
+    </div>
+
+    <!-- CERTIFICATE PREVIEW -->
+    <div class="preview-container">
+        <!-- PAGE 1 -->
+        <div class="cert-page" id="cert-page-1">
+            <div>
+                <div class="header-logo-wrapper">
+                    <img alt="USPTO Header" src="data:image/png;base64,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">
+                </div>
+
+                <div class="mark-showcase">
+                    <div id="prev-wordMark">LEGACY INFLUENCER</div>
+                    <img id="cert-logo-img" src="" alt="Brand Logo" style="width: 180px;">
+                </div>
+
+                <div class="cert-two-col">
+                    <div class="left-meta">
+                        <div>Reg. No. <span id="prev-regNo">6,392,309</span></div>
+                        <div>Registered <span id="prev-regDate">Jun. 22, 2021</span></div>
+                        <div>Int. Cl.: <span id="prev-intClass">41</span></div>
+                        <div id="prev-markType">Service Mark</div>
+                        <div id="prev-registerType">Principal Register</div>
+                    </div>
+
+                    <div class="right-details">
+                        <p>
+                            <span id="prev-ownerName">Montae, Linette</span> (<span id="prev-entityType">UNITED STATES INDIVIDUAL</span>)<br>
+                            <span id="prev-address" style="white-space: pre-line;">2400 Old Brick Rd Ste 58
+Glen Allen, VIRGINIA 23060</span>
+                        </p>
+                        <p id="prev-goodsDesc">CLASS 41: Entertainment and educational services...</p>
+                        <p>FIRST USE <span id="prev-firstUse">9-1-2017</span>; IN COMMERCE <span id="prev-inCommerce">9-1-2017</span></p>
+                        <p id="prev-markDesc" style="white-space: pre-line;">THE MARK CONSISTS OF STANDARD CHARACTERS...</p>
+                        <p>SER. NO. <span id="prev-serialNo">88-604,311</span>, FILED <span id="prev-filedDate">09-04-2019</span></p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="page1-footer">
+                <div class="seal-sig-block">
+                    <div class="seal-container">
+                        <img alt="Seal" src="data:image/png;base64,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">
+                    </div>
+                    <div class="signature-wrapper">
+                        <div class="sig-handwriting" id="prev-signatory">Dana H...</div>
+                    </div>
+                    <div class="sig-caption">
+                        Performing the Functions and Duties of the<br>
+                        Under Secretary of Commerce for Intellectual Property and<br>
+                        Director of the United States Patent and Trademark Office
+                    </div>
+                </div>
+                <div id="qrcode-container"></div>
+            </div>
+        </div>
+
+        <!-- PAGE 2 -->
+        <div class="cert-page" id="cert-page-2">
+            <div>
+                <div class="page2-box">
+                    REQUIREMENTS TO MAINTAIN YOUR FEDERAL TRADEMARK REGISTRATION<br><br>
+                    WARNING: YOUR REGISTRATION WILL BE CANCELLED IF YOU DO NOT FILE THE DOCUMENTS BELOW DURING THE SPECIFIED TIME PERIODS.
+                </div>
+                <div class="page2-content">
+                    <h4>Requirements in the First Ten Years*<br>What and When to File:</h4>
+                    <ul>
+                        <li><strong><em>First Filing Deadline:</em></strong> You must file a Declaration of Use (or Excusable Nonuse) between the 5th and 6th years after the registration date. See 15 U.S.C. §§1058, 1141k. If the declaration is accepted, the registration will continue in force for the remainder of the ten-year period, calculated from the registration date, unless cancelled by an order of the Commissioner for Trademarks or a federal court.</li>
+                        <li><strong><em>Second Filing Deadline:</em></strong> You must file a Declaration of Use (or Excusable Nonuse) and an Application for Renewal between the 9th and 10th years after the registration date.* See 15 U.S.C. §1059.</li>
+                    </ul>
+                    <h4>Requirements in Successive Ten-Year Periods*<br>What and When to File:</h4>
+                    <ul>
+                        <li>You must file a Declaration of Use (or Excusable Nonuse) and an Application for Renewal between every 9th and 10th-year period, calculated from the registration date.*</li>
+                    </ul>
+                    <h4>Grace Period Filings*</h4>
+                    <p>The above documents will be accepted as timely if filed within six months after the deadlines listed above with the payment of an additional fee.</p>
+                    <p><strong>*ATTENTION MADRID PROTOCOL REGISTRANTS:</strong> The holder of an international registration with an extension of protection to the United States under the Madrid Protocol must timely file the Declarations of Use (or Excusable Nonuse) referenced above directly with the United States Patent and Trademark Office (USPTO). The time periods for filing are based on the U.S. registration date (not the international registration date). The deadlines and grace periods for the Declarations of Use (or Excusable Nonuse) are identical to those for nationally issued registrations. See 15 U.S.C. §§1058, 1141k. However, owners of international registrations do not file renewal applications at the USPTO. Instead, the holder must file a renewal of the underlying international registration at the International Bureau of the World Intellectual Property Organization, under Article 7 of the Madrid Protocol, before the expiration of each ten-year term of protection, calculated from the date of the international registration. See 15 U.S.C. §1141j. For more information and renewal forms for the international registration, see http://www.wipo.int/madrid/en/.</p>
+                    <p><strong>NOTE:</strong> Fees and requirements for maintaining registrations are subject to change. Please check the USPTO website for further information. With the exception of renewal applications for registered extensions of protection, you can file the registration maintenance documents referenced above online at http://www.uspto.gov.</p>
+                    <p><strong>NOTE:</strong> A courtesy e-mail reminder of USPTO maintenance filing deadlines will be sent to trademark owners/holders who authorize e-mail communication and maintain a current e-mail address with the USPTO. To ensure that e-mail is authorized and your address is current, please use the Trademark Electronic Application System (TEAS) Correspondence Address and Change of Owner Address forms available at http://www.uspto.gov.</p>
+                </div>
+            </div>
+            <div class="page2-footer">
+                Page: 2 of 2 / RN # <span id="prev-p2-regNo">6392309</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // ============= DATABASE LOGIC =============
+    const BASE_URL = window.location.href.split('?')[0];
+
+    function getFormData() {
+        return {
+            tmNumber: document.getElementById('tmNumber').value,
+            regNo: document.getElementById('regNo').value,
+            regDate: document.getElementById('regDate').value,
+            footerRnNo: document.getElementById('footerRnNo').value,
+            intClass: document.getElementById('intClass').value,
+            markType: document.getElementById('markType').value,
+            registerType: document.getElementById('registerType') ? document.getElementById('registerType').value : 'Principal Register',
+            signatoryCustom: document.getElementById('signatoryCustom').value,
+            sigFontSelect: document.getElementById('sigFontSelect').value,
+            ownerName: document.getElementById('ownerName').value,
+            entityType: document.getElementById('entityType').value,
+            address: document.getElementById('address').value,
+            goodsDesc: document.getElementById('goodsDesc').value,
+            firstUse: document.getElementById('firstUse').value,
+            inCommerce: document.getElementById('inCommerce').value,
+            markDesc: document.getElementById('markDesc').value,
+            serialNo: document.getElementById('serialNo').value,
+            filedDate: document.getElementById('filedDate').value,
+            wordMarkInput: document.getElementById('wordMarkInput').value,
+            logoData: document.getElementById('cert-logo-img').src,
+            logoSize: document.getElementById('logoSlider').value
+        };
+    }
+
+    function saveToDatabase() {
+        const data = getFormData();
+        const tm = data.tmNumber.trim();
+        
+        if (!tm) {
+            alert("Please enter a TM Number first!");
+            return;
+        }
+
+        localStorage.setItem(`tm_${tm}`, JSON.stringify(data));
+        alert(`Certificate for ${tm} saved successfully!`);
+        loadDatabase();
+    }
+
+    function loadDatabase() {
+        const dbList = document.getElementById('dbList');
+        dbList.innerHTML = '';
+        
+        let hasData = false;
+        for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key.startsWith('tm_')) {
+                hasData = true;
+                const tm = key.replace('tm_', '');
+                const data = JSON.parse(localStorage.getItem(key));
+                
+                const item = document.createElement('div');
+                item.className = 'db-item';
+                item.innerHTML = `
+                    <div class="db-info">
+                        <span class="db-tm">${tm}</span>
+                        <span class="db-owner">${data.ownerName} | ${data.wordMarkInput}</span>
+                    </div>
+                    <div class="db-actions">
+                        <button class="btn-purple" onclick="copyLink('${tm}')">🔗 Copy Link</button>
+                        <button class="btn-green" onclick="viewCertificate('${tm}')">👁 View</button>
+                        <button class="btn-red-sm" onclick="deleteCertificate('${tm}')">🗑 Delete</button>
+                    </div>
+                `;
+                dbList.appendChild(item);
+            }
+        }
+        
+        if (!hasData) {
+            dbList.innerHTML = '<p style="color:#94a3b8; font-size:0.9rem;">No saved certificates found. Fill the form and click SAVE to create one.</p>';
+        }
+    }
+
+    function deleteCertificate(tm) {
+        if (confirm(`Are you sure you want to delete certificate ${tm}?`)) {
+            localStorage.removeItem(`tm_${tm}`);
+            loadDatabase();
+        }
+    }
+
+    function copyLink(tm) {
+        const link = `${BASE_URL}?tm=${tm}`;
+        navigator.clipboard.writeText(link).then(() => {
+            alert("Link copied to clipboard:\n" + link);
+        }).catch(err => {
+            alert("Failed to copy: " + err);
+        });
+    }
+
+    function viewCertificate(tm) {
+        window.open(`${BASE_URL}?tm=${tm}`, '_blank');
+    }
+
+    function loadCertificateData(tm) {
+        const dataStr = localStorage.getItem(`tm_${tm}`);
+        if (!dataStr) {
+            alert("Certificate not found!");
+            return;
+        }
+        const data = JSON.parse(dataStr);
+        
+        // Populate fields
+        for (const key in data) {
+            const el = document.getElementById(key);
+            if (el) el.value = data[key];
+        }
+        
+        // Handle Logo
+        if (data.logoData && data.logoData.length > 50) {
+            const img = document.getElementById('cert-logo-img');
+            img.src = data.logoData;
+            img.style.display = 'block';
+            document.getElementById('prev-wordMark').style.display = 'none';
+            syncLogoSize(data.logoSize);
+        }
+
+        updatePreview();
+        updateSignatureText();
+        updateSignatureFont();
+    }
+
+    // ============= CORE PREVIEW LOGIC =============
+    function updatePreview() {
+        const tmVal = document.getElementById('tmNumber').value;
+        document.getElementById('prev-regNo').innerText = document.getElementById('regNo').value;
+        document.getElementById('prev-p2-regNo').innerText = document.getElementById('footerRnNo').value;
+        document.getElementById('prev-regDate').innerText = document.getElementById('regDate').value;
+        document.getElementById('prev-intClass').innerText = document.getElementById('intClass').value;
+        document.getElementById('prev-markType').innerText = document.getElementById('markType').value;
+        document.getElementById('prev-ownerName').innerText = document.getElementById('ownerName').value;
+        document.getElementById('prev-entityType').innerText = document.getElementById('entityType').value;
+        document.getElementById('prev-address').innerText = document.getElementById('address').value;
+        document.getElementById('prev-goodsDesc').innerText = document.getElementById('goodsDesc').value;
+        document.getElementById('prev-firstUse').innerText = document.getElementById('firstUse').value;
+        document.getElementById('prev-inCommerce').innerText = document.getElementById('inCommerce').value;
+        document.getElementById('prev-markDesc').innerText = document.getElementById('markDesc').value;
+        document.getElementById('prev-serialNo').innerText = document.getElementById('serialNo').value;
+        document.getElementById('prev-filedDate').innerText = document.getElementById('filedDate').value;
+        document.getElementById('prev-wordMark').innerText = document.getElementById('wordMarkInput').value;
+        generateQR(tmVal);
+    }
+
+    function updateSignatureText() {
+        document.getElementById('prev-signatory').innerText = document.getElementById('signatoryCustom').value;
+    }
+
+    function updateSignatureFont() {
+        document.getElementById('prev-signatory').style.fontFamily = document.getElementById('sigFontSelect').value;
+    }
+
+    function handleLogoUpload(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            const img = document.getElementById('cert-logo-img');
+            img.src = e.target.result;
+            img.style.display = 'block';
+            document.getElementById('prev-wordMark').style.display = 'none';
+            syncLogoSize(document.getElementById('logoSlider').value);
+        };
+        reader.readAsDataURL(file);
+    }
+
+    function syncLogoSize(val) {
+        document.getElementById('logoSlider').value = val;
+        document.getElementById('logoScaleInput').value = val;
+        document.getElementById('cert-logo-img').style.width = val + 'px';
+    }
+
+    function deleteLogo() {
+        const img = document.getElementById('cert-logo-img');
+        img.src = '';
+        img.style.display = 'none';
+        document.getElementById('prev-wordMark').style.display = 'block';
+        document.getElementById('logoInput').value = '';
+    }
+
+    function removeWhiteBg() {
+        const img = document.getElementById('cert-logo-img');
+        if (!img.src || img.style.display === 'none') return alert("প্রথমে লোগো আপলোড করুন!");
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d');
+        canvas.width = img.naturalWidth;
+        canvas.height = img.naturalHeight;
+        ctx.drawImage(img, 0, 0);
+        const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        for (let i = 0; i < imgData.data.length; i += 4) {
+            if (imgData.data[i] > 235 && imgData.data[i+1] > 235 && imgData.data[i+2] > 235) {
+                imgData.data[i+3] = 0;
+            }
+        }
+        ctx.putImageData(imgData, 0, 0);
+        img.src = canvas.toDataURL();
+    }
+
+    function randomRegNo() {
+        document.getElementById('regNo').value = Math.floor(6000000 + Math.random() * 1999999).toLocaleString();
+        document.getElementById('footerRnNo').value = document.getElementById('regNo').value.replace(/[^0-9]/g, '');
+        updatePreview();
+    }
+
+    function randomSerialNo() {
+        const p1 = Math.floor(90 + Math.random() * 9);
+        const p2 = Math.floor(100000 + Math.random() * 899999).toLocaleString();
+        document.getElementById('serialNo').value = `${p1}-${p2}`;
+        updatePreview();
+    }
+
+    function randomDate(id) {
+        const months = ["Jan.", "Feb.", "Mar.", "Apr.", "May", "Jun.", "Jul.", "Aug.", "Sep.", "Oct.", "Nov.", "Dec."];
+        document.getElementById(id).value = `${months[Math.floor(Math.random() * months.length)]} ${Math.floor(1 + Math.random() * 28)}, ${2023 + Math.floor(Math.random() * 3)}`;
+        updatePreview();
+    }
+
+    function generateQR(tmNumber) {
+        const qrContainer = document.getElementById('qrcode-container');
+        qrContainer.innerHTML = '';
+        
+        // QR Code now points to the unique URL for this TM Number
+        const qrText = tmNumber ? `${BASE_URL}?tm=${tmNumber}` : 'USPTO-VERIFIED';
+        
+        new QRCode(qrContainer, {
+            text: qrText,
+            width: 72,
+            height: 72
+        });
+    }
+
+    function downloadJPG() {
+        html2canvas(document.getElementById('cert-page-1'), { scale: 2, useCORS: true }).then(canvas => {
+            const link = document.createElement('a');
+            link.download = `USPTO-Certificate-${document.getElementById('serialNo').value}.jpg`;
+            link.href = canvas.toDataURL('image/jpeg', 0.96);
+            link.click();
+        });
+    }
+
+    async function downloadPDF() {
+        const { jsPDF } = window.jspdf;
+        const pdf = new jsPDF('p', 'mm', 'a4');
+        const pdfWidth = pdf.internal.pageSize.getWidth();
+
+        const canvas1 = await html2canvas(document.getElementById('cert-page-1'), { scale: 2, useCORS: true });
+        const height1 = (canvas1.height * pdfWidth) / canvas1.width;
+        pdf.addImage(canvas1.toDataURL('image/jpeg', 0.96), 'JPEG', 0, 0, pdfWidth, height1);
+
+        pdf.addPage();
+        const canvas2 = await html2canvas(document.getElementById('cert-page-2'), { scale: 2, useCORS: true });
+        const height2 = (canvas2.height * pdfWidth) / canvas2.width;
+        pdf.addImage(canvas2.toDataURL('image/jpeg', 0.96), 'JPEG', 0, 0, pdfWidth, height2);
+
+        pdf.save(`USPTO-${document.getElementById('serialNo').value.replace(/[^0-9]/g, '')}.pdf`);
+    }
+
+    // ============= INITIALIZATION =============
+    window.onload = () => {
+        const urlParams = new URLSearchParams(window.location.search);
+        const tmParam = urlParams.get('tm');
+
+        if (tmParam) {
+            // If URL has ?tm=XXX, hide panels and load data (View Mode)
+            document.body.classList.add('view-mode');
+            loadCertificateData(tmParam);
+        } else {
+            // If no URL param, load normal tool interface
+            updatePreview();
+            loadDatabase();
+            setTimeout(() => generateQR(document.getElementById('tmNumber').value), 500);
+        }
+    };
+</script>
+
+</body>
+</html>
